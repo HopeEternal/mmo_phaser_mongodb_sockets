@@ -16,6 +16,12 @@ class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16
     });
+    this.load.image('golem', 'assets/images/coppergolem.png');
+    this.load.image('ent', 'assets/images/dark-ent.png');
+    this.load.image('demon', 'assets/images/demon.png');
+    this.load.image('worm', 'assets/images/giant-worm.png');
+    this.load.image('wolf', 'assets/images/wolf.png');
+    this.load.image('sword', 'assets/images/attack-icon.png');
   }
 
   create() {
@@ -60,6 +66,14 @@ class WorldScene extends Phaser.Scene {
    
     this.socket.on('newPlayer', function (playerInfo) {
       this.addOtherPlayers(playerInfo);
+    }.bind(this));
+    
+    this.socket.on('disconnect', function (playerId) {
+      this.otherPlayers.getChildren().forEach(function (player) {
+        if (playerId === player.playerId) {
+          player.destroy();
+        }
+      }.bind(this));
     }.bind(this));
   }
 
@@ -135,6 +149,7 @@ createPlayer(playerInfo) {
  
   // don't go out of the map
   this.container.body.setCollideWorldBounds(true);
+  this.physics.add.collider(this.container, this.spawns);
 }
 
 addOtherPlayers(playerInfo) {
@@ -154,15 +169,38 @@ updateCamera() {
 createEnemies() {
   // where the enemies will be
   this.spawns = this.physics.add.group({
-    classType: Phaser.GameObjects.Zone
+    classType: Phaser.GameObjects.Sprite
   });
-  for (var i = 0; i < 30; i++) {
-    var x = Phaser.Math.RND.between(0, this.physics.world.bounds.width);
-    var y = Phaser.Math.RND.between(0, this.physics.world.bounds.height);
+  for (var i = 0; i < 20; i++) {
+    const location = this.getValidLocation();
     // parameters are x, y, width, height
-    this.spawns.create(x, y, 20, 20);
+    var enemy = this.spawns.create(location.x, location.y, this.getEnemySprite());
+    enemy.body.setCollideWorldBounds(true);
+    enemy.body.setImmovable();
   }
+}
 
+getEnemySprite() {
+  var sprites = ['golem', 'ent', 'demon', 'worm', 'wolf'];
+  return sprites[Math.floor(Math.random() * sprites.length)];
+}
+ 
+getValidLocation() {
+  var validLocation = false;
+  var x, y;
+  while (!validLocation) {
+    x = Phaser.Math.RND.between(0, this.physics.world.bounds.width);
+    y = Phaser.Math.RND.between(0, this.physics.world.bounds.height);
+ 
+    var occupied = false;
+    this.spawns.getChildren().forEach((child) => {
+      if (child.getBounds().contains(x, y)) {
+        occupied = true;
+      }
+    });
+    if (!occupied) validLocation = true;
+  }
+  return { x, y };
 }
 
   onMeetEnemy(player, zone) {
