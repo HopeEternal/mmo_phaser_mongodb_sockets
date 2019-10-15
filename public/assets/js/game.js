@@ -144,12 +144,22 @@ createPlayer(playerInfo) {
   this.physics.world.enable(this.container);
   this.container.add(this.player);
  
+  // add weapon
+  this.weapon = this.add.sprite(10, 0, 'sword');
+  this.weapon.setScale(0.5);
+  this.weapon.setSize(8, 8);
+  this.physics.world.enable(this.weapon);
+  
+  this.container.add(this.weapon);
+  this.attacking = false;
+
   // update camera
   this.updateCamera();
  
   // don't go out of the map
   this.container.body.setCollideWorldBounds(true);
   this.physics.add.collider(this.container, this.spawns);
+  this.physics.add.overlap(this.weapon, this.spawns, this.onMeetEnemy, false, this);
 }
 
 addOtherPlayers(playerInfo) {
@@ -178,6 +188,41 @@ createEnemies() {
     enemy.body.setCollideWorldBounds(true);
     enemy.body.setImmovable();
   }
+  // move enemies
+  this.timedEvent = this.time.addEvent({
+    delay: 1000,
+    callback: this.moveEnemies,
+    callbackScope: this,
+    loop: true
+  });
+}
+
+moveEnemies () {
+  this.spawns.getChildren().forEach((enemy) => {
+    const randNumber = Math.floor((Math.random() * 4) + 1);
+ 
+    switch(randNumber) {
+      case 1:
+        enemy.body.setVelocityX(50);
+        break;
+      case 2:
+        enemy.body.setVelocityX(-50);
+        break;
+      case 3:
+        enemy.body.setVelocityY(50);
+        break;
+      case 4:
+        enemy.body.setVelocityY(-50);
+        break;
+      default:
+        enemy.body.setVelocityX(50);
+    }
+  });
+ 
+  setTimeout(() => {
+    this.spawns.setVelocityX(0);
+    this.spawns.setVelocityY(0);
+  }, 500);
 }
 
 getEnemySprite() {
@@ -203,10 +248,12 @@ getValidLocation() {
   return { x, y };
 }
 
-  onMeetEnemy(player, zone) {
-    // we move the zone to some other location
-    zone.x = Phaser.Math.RND.between(0, this.physics.world.bounds.width);
-    zone.y = Phaser.Math.RND.between(0, this.physics.world.bounds.height);
+  onMeetEnemy(player, enemy) {
+    if (this.attacking) {
+      const location = this.getValidLocation();
+      enemy.x = location.x;
+      enemy.y = location.y;
+    }
   }
 
   update() {
