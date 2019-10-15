@@ -19,6 +19,7 @@ class BootScene extends Phaser.Scene {
   }
 
   create() {
+    this.socket = io();
     this.scene.start('WorldScene');
   }
 }
@@ -31,76 +32,52 @@ class WorldScene extends Phaser.Scene {
   }
 
   create() {
-    // create the map
-    var map = this.make.tilemap({
-      key: 'map'
-    });
-
-    // first parameter is the name of the tilemap in tiled
-    var tiles = map.addTilesetImage('spritesheet', 'tiles', 16, 16, 1, 2);
-
-    // creating the layers
-    var grass = map.createStaticLayer('Grass', tiles, 0, 0);
-    var obstacles = map.createStaticLayer('Obstacles', tiles, 0, 0);
-
-    // make all tiles in obstacles collidable
-    obstacles.setCollisionByExclusion([-1]);
-
-    //  animation with key 'left', we don't need left and right as we will use one and flip the sprite
-    this.anims.create({
-      key: 'left',
-      frames: this.anims.generateFrameNumbers('player', {
-        frames: [1, 7, 1, 13]
-      }),
-      frameRate: 10,
-      repeat: -1
-    });
-
-    // animation with key 'right'
-    this.anims.create({
-      key: 'right',
-      frames: this.anims.generateFrameNumbers('player', {
-        frames: [1, 7, 1, 13]
-      }),
-      frameRate: 10,
-      repeat: -1
-    });
-    this.anims.create({
-      key: 'up',
-      frames: this.anims.generateFrameNumbers('player', {
-        frames: [2, 8, 2, 14]
-      }),
-      frameRate: 10,
-      repeat: -1
-    });
-    this.anims.create({
-      key: 'down',
-      frames: this.anims.generateFrameNumbers('player', {
-        frames: [0, 6, 0, 12]
-      }),
-      frameRate: 10,
-      repeat: -1
-    });
-
-    // our player sprite created through the phycis system
-    this.player = this.physics.add.sprite(50, 100, 'player', 6);
-
-    // don't go out of the map
-    this.physics.world.bounds.width = map.widthInPixels;
-    this.physics.world.bounds.height = map.heightInPixels;
-    this.player.setCollideWorldBounds(true);
-
-    // don't walk on trees
-    this.physics.add.collider(this.player, obstacles);
-
-    // limit camera to map
-    this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
-    this.cameras.main.startFollow(this.player);
-    this.cameras.main.roundPixels = true; // avoid tile bleed
-
+    this.socket = io();
+   
+    // create map
+    this.createMap();
+   
+    // create player animations
+    this.createAnimations();
+   
     // user input
     this.cursors = this.input.keyboard.createCursorKeys();
-
+   
+    // create enemies
+    this.createEnemies();
+   
+    // listen for web socket events
+    this.socket.on('currentPlayers', function (players) {
+      Object.keys(players).forEach(function (id) {
+        if (players[id].playerId === this.socket.id) {
+          this.createPlayer(players[id]);
+        } else {
+          this.addOtherPlayers(players[id]);
+        }
+      }.bind(this));
+    }.bind(this));
+   
+    this.socket.on('newPlayer', function (playerInfo) {
+      this.addOtherPlayers(playerInfo);
+    }.bind(this));
+  }
+  
+  createPlayer() {
+    // our player sprite created through the phycis system
+    this.player = this.physics.add.sprite(50, 100, 'player', 6);
+  
+    // don't go out of the map
+    this.player.setCollideWorldBounds(true);
+  }
+  
+  updateCamera() {
+    // limit camera to map
+    this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
+    this.cameras.main.startFollow(this.player);
+    this.cameras.main.roundPixels = true; // avoid tile bleed
+  }
+  
+  createEnemies() {
     // where the enemies will be
     this.spawns = this.physics.add.group({
       classType: Phaser.GameObjects.Zone
