@@ -10,6 +10,8 @@ const passport = require('passport');
 const routes = require('./routes/main');
 const secureRoutes = require('./routes/secure');
 const passwordRoutes = require('./routes/password');
+const asyncMiddleware = require('./middleware/asyncMiddleware');
+const ChatModel = require('./models/chatModel');
 
 // setup mongo connection
 const uri = process.env.MONGO_CONNECTION_URL;
@@ -25,13 +27,11 @@ mongoose.set('useFindAndModify', false);
 
 // create an instance of an express app
 const app = express();
-
-//Socket.io Library
 const server = require('http').Server(app);
 const io = require('socket.io').listen(server);
- 
+
 const players = {};
- 
+
 io.on('connection', function (socket) {
   console.log('a user connected: ', socket.id);
   // create a new player and add it to our players object
@@ -45,7 +45,7 @@ io.on('connection', function (socket) {
   socket.emit('currentPlayers', players);
   // update all other players of the new player
   socket.broadcast.emit('newPlayer', players[socket.id]);
- 
+
   // when a player disconnects, remove them from our players object
   socket.on('disconnect', function () {
     console.log('user disconnected: ', socket.id);
@@ -53,7 +53,7 @@ io.on('connection', function (socket) {
     // emit a message to all players to remove this player
     io.emit('disconnect', socket.id);
   });
- 
+
   // when a plaayer moves, update the player data
   socket.on('playerMovement', function (movementData) {
     players[socket.id].x = movementData.x;
@@ -64,7 +64,6 @@ io.on('connection', function (socket) {
   });
 });
 
-
 // update express settings
 app.use(bodyParser.urlencoded({ extended: false })); // parse application/x-www-form-urlencoded
 app.use(bodyParser.json()); // parse application/json
@@ -73,11 +72,9 @@ app.use(cookieParser());
 // require passport auth
 require('./auth/auth');
 
-/*
 app.get('/game.html', passport.authenticate('jwt', { session : false }), function (req, res) {
   res.sendFile(__dirname + '/public/game.html');
 });
-*/
 
 app.get('/game.html', function (req, res) {
   res.sendFile(__dirname + '/public/game.html');
@@ -94,6 +91,17 @@ app.use('/', routes);
 app.use('/', passwordRoutes);
 app.use('/', passport.authenticate('jwt', { session : false }), secureRoutes);
 
+app.post('/submit-chatline', passport.authenticate('jwt', { session : false }), asyncMiddleware(async (req, res, next) => {
+  const { message } = req.body;
+  const { email, name } = req.user;
+  await ChatModel.create({ email, message });
+  io.emit('new message', {
+    username: name,
+    message,
+  });
+  res.status(200).json({ status: 'ok' });
+}));
+
 // catch all other routes
 app.use((req, res, next) => {
   res.status(404).json({ message: '404 - Not Found' });
@@ -105,7 +113,6 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message });
 });
 
-// have the server start listening on the provided port
 server.listen(process.env.PORT || 3000, () => {
   console.log(`Server started on port ${process.env.PORT || 3000}`);
 });
